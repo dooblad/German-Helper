@@ -1,5 +1,6 @@
 import System.Random
 import Data.String.Utils
+import Data.List.Split
 
 contains :: [String] -> String -> Bool
 contains list str
@@ -109,6 +110,21 @@ main :: IO ()
 main = do
   contents <- readFile "words.txt"
   -- Extract English -> German word mappings from raw input.
-  let mappings = (map (map strip)) . (map (Main.split "=>")) . lines $ contents
-  quiz mappings
+  -- Split each line on "=>", then strip the leading/trailing whitespace on
+  -- every string, and then split on empty lines to separate each list of
+  -- mappings into their respective chapters.
+  let chapters = splitOn [[]] . (map (map strip)) . (map (Main.split "=>")) . lines $ contents
+  putStr ("Welches Kapitel (A, B, 1-" ++ (show . (\x -> x - 2) . length $ chapters) ++ ", oder alles)? ")
+  choice <- getLine
+  let cleanChoice = strip choice
+  if cleanChoice == "alles"
+    then quiz (join [] chapters)
+    else do
+    let chapterIndex = case cleanChoice of
+                       "A" -> 0
+                       "B" -> 1
+                       -- +2 for "A"/"B", -1 for zero-based indexing.
+                       a -> (read a) + 1
+    quiz (chapters !! chapterIndex)
+  return ()
 
