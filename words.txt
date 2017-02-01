@@ -674,6 +674,8 @@ his (female object posessive) => seine
 sure => sicher
 probably => wahrscheinlich
 
+TEMP => TEMP
+
 TV set => der Fernseher
 TV sets => die Fernseher
 backpack => der Rucksack
@@ -1037,8 +1039,8 @@ examples => die Beispiele
 for example => zum Beispiel
 report => das Referat
 reports => die Referate
-female physician => die Ärztin
-female physicians => die Ärztinnen
+physician/doctor (female) => die Ärztin
+physicians/doctors (female) => die Ärztinnen
 flower => die Blume
 flowers => die Blumen
 violin => die Geige
@@ -1051,8 +1053,8 @@ grandma => die Oma
 grandmas => die Omas
 duty/requirement => die Pflicht
 duties/requirements => die Pflichten
-male physician => der Arzt
-male physicians => die Ärzte
+physician/doctor (male) => der Arzt
+physicians/doctors (male) => die Ärzte
 wastebasket => der Papierkorb
 wastebaskets => die Papïerkorbe
 poem => das Gedicht
@@ -1700,4 +1702,3 @@ under/underneath => unter
 under the window => unter dem Fenster
 whom (dative) => wem
 twice => zweimal
-
