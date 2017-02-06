@@ -1,6 +1,9 @@
-import System.Random
+-- TODO: Make these imports qualified.
 import Data.String.Utils
 import Data.List.Split
+import System.Console.ANSI
+import System.Random
+
 
 contains :: [String] -> String -> Bool
 contains list str
@@ -27,6 +30,7 @@ isNounPhrase str =
   in (length wordList) == 2 &&
      (contains ["der", "die", "das"] (wordList !! 0))
 
+
 hasArticle :: [String] -> Bool
 hasArticle wordList = (not . null $ wordList) &&
                       (contains ["der", "die", "das"] (wordList !! 0))
@@ -40,6 +44,7 @@ hasArticle wordList = (not . null $ wordList) &&
           you should define your own data type that has each possible mistake as
           a value (i.e., NoArticle, WrongArticle, WrongNoun, etc.).
 -}
+
 
 makeArticleFeedback :: String -> String -> Maybe String
 makeArticleFeedback userAnswer correctAnswer =
@@ -95,6 +100,12 @@ makeFeedback userAnswer correctAnswer
                    else Just ("Falsch. " ++ correctAnswerStr)
 
 
+userAck :: IO ()
+userAck = do
+  putStr "Press ENTER to continue\n"
+  -- Wait for the user to acknowledge the feedback before continuing.
+  _ <- getLine
+  return ()
 
 {-|
   Quizzes the specific phrase at `questionIndex` in `mappings`.
@@ -107,7 +118,9 @@ quizIndex mappings questionIndex = do
   case makeFeedback userAnswer germanPhrase of
     Just feedback -> do
       putStr (feedback ++ "\n\n")
-      -- Ask the same question again when they get it wrong.
+      userAck
+      -- Clear the screen and ask the same question again.
+      clearScreen
       quizIndex mappings questionIndex
     Nothing -> putStr "Richtig!\n\n"
 
@@ -117,14 +130,19 @@ quizIndex mappings questionIndex = do
 -}
 quiz :: [[String]] -> IO ()
 quiz mappings = do
+  clearScreen
   questionIndex <- randomRIO (0, length mappings) :: IO Int
   quizIndex mappings questionIndex
+  userAck
   quiz mappings
 
 
 main :: IO ()
 main = do
+  clearScreen
+  putStr "Loading words...\n"
   contents <- readFile "words.txt"
+  clearScreen
   -- Extract English -> German word mappings from raw input.
   -- Split each line on "=>", then strip the leading/trailing whitespace on
   -- every string, and then split on empty lines to separate each list of
