@@ -95,16 +95,32 @@ makeFeedback userAnswer correctAnswer
                    else Just ("Falsch. " ++ correctAnswerStr)
 
 
-quiz :: [[String]] -> IO ()
-quiz mappings = do
-  questionIndex <- randomRIO (0, length mappings) :: IO Int
+
+{-|
+  Quizzes the specific phrase at `questionIndex` in `mappings`.
+-}
+quizIndex :: [[String]] -> Int -> IO ()
+quizIndex mappings questionIndex = do
   let [englishPhrase, germanPhrase] = mappings !! questionIndex
   putStr (englishPhrase ++ " => ")
   userAnswer <- getLine
   case makeFeedback userAnswer germanPhrase of
-    Just feedback -> putStr (feedback ++ "\n\n")
+    Just feedback -> do
+      putStr (feedback ++ "\n\n")
+      -- Ask the same question again when they get it wrong.
+      quizIndex mappings questionIndex
     Nothing -> putStr "Richtig!\n\n"
+
+
+{-|
+  Quizzes random phrases from `mappings` without ever stopping.
+-}
+quiz :: [[String]] -> IO ()
+quiz mappings = do
+  questionIndex <- randomRIO (0, length mappings) :: IO Int
+  quizIndex mappings questionIndex
   quiz mappings
+
 
 main :: IO ()
 main = do
