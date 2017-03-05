@@ -1,23 +1,13 @@
--- TODO: Make these imports qualified.
-import Data.String.Utils
-import Data.List.Split
-import System.Console.ANSI
-import System.Random
+module Main where
 
+import Data.String.Utils (endswith, join, strip)
+import Data.List.Split (splitOn)
+import System.Console.ANSI (clearScreen)
+import System.Random (randomRIO)
 
-contains :: [String] -> String -> Bool
-contains list str
-  | null list = False
-  | (head list) == str = True
-  | otherwise = contains (tail list) str
-
-
-split :: String -> String -> [String]
-split splitStr str = aux str "" []
-  where aux str' section acc
-          | str' == [] = if (null section) then acc else acc ++ [section]
-          | (take (length splitStr) str') == splitStr = aux (drop (length splitStr) str') "" (acc ++ [section])
-          | otherwise = aux (tail str') (section ++ [head str']) acc
+import UserDataLoader (loadUserData)
+import StringUtils (contains, splitAndStrip)
+import VocabLoader (loadVocab)
 
 
 {-|
@@ -107,11 +97,12 @@ userAck = do
   _ <- getLine
   return ()
 
+
 {-|
   Quizzes the specific phrase at `questionIndex` in `mappings`.
 -}
-quizIndex :: [[String]] -> Int -> IO ()
-quizIndex mappings questionIndex = do
+quizIndex :: [[String]] -> [[String]] -> Int -> IO ()
+quizIndex userData mappings questionIndex = do
   let [englishPhrase, germanPhrase] = mappings !! questionIndex
   putStr (englishPhrase ++ " => ")
   userAnswer <- getLine
@@ -121,44 +112,46 @@ quizIndex mappings questionIndex = do
       userAck
       -- Clear the screen and ask the same question again.
       clearScreen
-      quizIndex mappings questionIndex
+      quizIndex userData mappings questionIndex
     Nothing -> putStr "Richtig!\n\n"
+
+
+recordIncorrectInput :: [[String]] -> Int -> [[String]]
+recordIncorrectInput userData questionIndex =
+  userData
+  {-
+    Splice a new list together (begin ++ [(thing, val+1)] ++ end).
+    Maybe switch to tuples.
+  -}
 
 
 {-|
   Quizzes random phrases from `mappings` without ever stopping.
 -}
-quiz :: [[String]] -> IO ()
-quiz mappings = do
+quiz :: [[String]] -> [[String]] -> IO ()
+quiz userData mappings = do
   clearScreen
   questionIndex <- randomRIO (0, length mappings) :: IO Int
-  quizIndex mappings questionIndex
+  quizIndex userData mappings questionIndex
   userAck
-  quiz mappings
+  quiz userData mappings
 
 
 main :: IO ()
 main = do
   clearScreen
-  putStr "Loading words...\n"
-  contents <- readFile "words.txt"
-  clearScreen
-  -- Extract English -> German word mappings from raw input.
-  -- Split each line on "=>", then strip the leading/trailing whitespace on
-  -- every string, and then split on empty lines to separate each list of
-  -- mappings into their respective chapters.
-  let chapters = splitOn [[]] . (map (map strip)) . (map (Main.split "=>")) . lines $ contents
-  putStr ("Welches Kapitel (A, B, 1-" ++ (show . (\x -> x - 2) . length $ chapters) ++ ", oder alles)? ")
+  chapters <- loadVocab
+  userData <- loadUserData "doobs"  -- TODO: Have them specify user name
+  putStr ("Welches Kapitel (A, B, 1-" ++ (show . (+(-2)) . length $ chapters) ++ ", oder alles)? ")
   choice <- getLine
   let cleanChoice = strip choice
   if cleanChoice == "alles"
-    then quiz (join [] chapters)
+    then quiz userData (join [] chapters)
     else do
     let chapterIndex = case cleanChoice of
                        "A" -> 0
                        "B" -> 1
                        -- +2 for "A"/"B", -1 for zero-based indexing.
                        a -> (read a) + 1
-    quiz (chapters !! chapterIndex)
+    quiz userData (chapters !! chapterIndex)
   return ()
-
