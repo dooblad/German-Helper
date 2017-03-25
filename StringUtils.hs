@@ -21,5 +21,5 @@ split splitStr str = aux str "" []
   Splits `str` on `splitStr` and strips whitespace from each resulting split.
 -}
 splitAndStrip :: String -> String -> [String]
-splitAndStrip splitStr str  =
+splitAndStrip splitStr str =
   map strip . split splitStr $ str

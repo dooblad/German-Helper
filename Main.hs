@@ -1,13 +1,19 @@
 module Main where
 
+import Data.List (groupBy, sortBy)
 import Data.String.Utils (endswith, join, strip)
-import Data.List.Split (splitOn)
 import System.Console.ANSI (clearScreen)
 import System.Random (randomRIO)
+import System.IO (hPutStrLn, withFile, IOMode (WriteMode))
+import System.Exit (exitWith, ExitCode (ExitSuccess))
 
-import UserDataLoader (loadUserData)
-import StringUtils (contains, splitAndStrip)
-import VocabLoader (loadVocab)
+import UserDataLoader (loadUserData, UserData)
+import StringUtils (contains)
+import VocabLoader (loadVocab, Vocab)
+
+
+exitCommand :: String
+exitCommand = "<EXIT>"
 
 
 {-|
@@ -101,57 +107,122 @@ userAck = do
 {-|
   Quizzes the specific phrase at `questionIndex` in `mappings`.
 -}
-quizIndex :: [[String]] -> [[String]] -> Int -> IO ()
-quizIndex userData mappings questionIndex = do
-  let [englishPhrase, germanPhrase] = mappings !! questionIndex
+quizIndex :: UserData -> Maybe Int -> Vocab -> Int -> IO UserData
+quizIndex userData chapterNum mappings questionIndex = do
+  let (_, questionId, englishPhrase, germanPhrase) = mappings !! questionIndex
   putStr (englishPhrase ++ " => ")
   userAnswer <- getLine
-  case makeFeedback userAnswer germanPhrase of
-    Just feedback -> do
-      putStr (feedback ++ "\n\n")
-      userAck
-      -- Clear the screen and ask the same question again.
-      clearScreen
-      quizIndex userData mappings questionIndex
-    Nothing -> putStr "Richtig!\n\n"
+  if userAnswer == exitCommand
+    then do writeUserData "doobs" userData   -- TODO: NO HRADCODE USER
+            exitWith ExitSuccess
+    else case makeFeedback userAnswer germanPhrase of
+           Just feedback -> do
+             let newUserData = recordAnswer False userData questionId
+             putStr (feedback ++ "\n\n")
+             userAck
+             -- Clear the screen and ask the same question again.
+             clearScreen
+             quizIndex newUserData chapterNum mappings questionIndex
+           Nothing -> do
+             putStr "Richtig!\n\n"
+             return (recordAnswer True userData questionId)
 
 
-recordIncorrectInput :: [[String]] -> Int -> [[String]]
-recordIncorrectInput userData questionIndex =
-  userData
-  {-
-    Splice a new list together (begin ++ [(thing, val+1)] ++ end).
-    Maybe switch to tuples.
-  -}
+recordAnswer :: Bool -> UserData -> Int -> UserData
+recordAnswer isCorrect userData questionId =
+  let (incorrect, total) = userData !! questionId
+      newEntry = (if isCorrect then incorrect else incorrect + 1, total + 1)
+  in take questionId userData ++ [newEntry] ++ drop (questionId + 1) userData
+
+
+createDistribution :: UserData -> [Double]
+createDistribution userData = scanl1 (+) . map toPercentage $ userData
+  where toPercentage (a, b) = (fromIntegral a) / (fromIntegral b)
+
+
+findCDFIndex :: Double -> [Double] -> Maybe Int
+findCDFIndex weight cdf =
+  let cdfLength = length cdf
+      aux i =
+        if i >= cdfLength then Nothing
+        else
+          let lowerBound = if i == 0
+                           then 0
+                           else cdf !! (i - 1)
+              upperBound = cdf !! i
+          in
+            if weight >= lowerBound && weight < upperBound
+            then Just i
+            else aux (i + 1)
+  in aux 0
+
+
+vocabForChapter :: Vocab -> Maybe Int -> Vocab
+vocabForChapter vocab Nothing = vocab
+vocabForChapter vocab (Just chapterNum) = sortBy compareId . filter isCorrectChapter $ vocab
+  where isCorrectChapter (chapterNum', _, _, _) = chapterNum == chapterNum'
+        compareId (_, idA, _, _) (_, idB, _, _) = idA `compare` idB
+
+
+nextQuestionIndex :: UserData -> Maybe Int -> Vocab -> IO Int
+nextQuestionIndex userData chapterNum vocab = do
+  let filteredVocab = vocabForChapter vocab chapterNum
+  let (_, firstId, _, _) = (head filteredVocab)
+  let filteredUserData = take (length filteredVocab) . drop firstId $ userData
+  let cdf = createDistribution (filteredUserData)
+  let maxWeight = last cdf
+  weightChoice <- randomRIO (0, maxWeight) :: IO Double
+  case (findCDFIndex weightChoice cdf) of
+    Just a -> return (a + firstId)
+    Nothing -> error "Couldn't find question index from cumulative distribution scan."
 
 
 {-|
   Quizzes random phrases from `mappings` without ever stopping.
 -}
-quiz :: [[String]] -> [[String]] -> IO ()
-quiz userData mappings = do
+quiz :: UserData -> Maybe Int -> Vocab -> IO UserData
+quiz userData chapterNum vocab = do
   clearScreen
-  questionIndex <- randomRIO (0, length mappings) :: IO Int
-  quizIndex userData mappings questionIndex
+  questionIndex <- nextQuestionIndex userData chapterNum vocab
+  newUserData <- quizIndex userData chapterNum vocab questionIndex
   userAck
-  quiz userData mappings
+  quiz newUserData chapterNum vocab
 
+
+chapterIndex :: String -> Maybe Int
+chapterIndex choice =
+  case choice of
+    "alles" -> Nothing
+    "A" -> Just 0
+    "B" -> Just 1
+    -- +2 for "A"/"B", -1 for zero-based indexing.
+    a -> Just ((read a) + 1)
+
+
+writeUserData :: String -> UserData -> IO ()
+writeUserData fileName userData = do
+  withFile (fileName ++ ".dat") WriteMode
+    (\handle -> hPutStrLn handle (show userData))
+
+
+printIntro :: IO ()
+printIntro = putStrLn "Type <EXIT> at any point to quit"
+
+
+numChapters :: Vocab -> Int
+numChapters vocab =
+  (+(-2)) . length . groupBy vocabChapterEqual . sortBy vocabChapterCompare $ vocab
+  where vocabChapterCompare (a, _, _, _) (b, _, _, _) = a `compare` b
+        vocabChapterEqual a b = vocabChapterCompare a b == EQ
 
 main :: IO ()
 main = do
   clearScreen
-  chapters <- loadVocab
-  userData <- loadUserData "doobs"  -- TODO: Have them specify user name
-  putStr ("Welches Kapitel (A, B, 1-" ++ (show . (+(-2)) . length $ chapters) ++ ", oder alles)? ")
+  vocab <- loadVocab
+  userData <- loadUserData vocab "doobs"  -- TODO: Have them specify user name.
+  printIntro
+  putStr ("Welches Kapitel (A, B, 1-" ++ (show . numChapters $ vocab) ++ ", oder alles)? ")
   choice <- getLine
   let cleanChoice = strip choice
-  if cleanChoice == "alles"
-    then quiz userData (join [] chapters)
-    else do
-    let chapterIndex = case cleanChoice of
-                       "A" -> 0
-                       "B" -> 1
-                       -- +2 for "A"/"B", -1 for zero-based indexing.
-                       a -> (read a) + 1
-    quiz userData (chapters !! chapterIndex)
+  _ <- quiz userData (chapterIndex cleanChoice) vocab
   return ()

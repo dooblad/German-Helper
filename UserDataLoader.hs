@@ -1,28 +1,33 @@
 module UserDataLoader where
 
 import System.Directory
+import System.IO (hPutStrLn, withFile, IOMode (WriteMode))
 
-import StringUtils (splitAndStrip)
+import VocabLoader (Vocab)
 
-loadUserData :: String -> IO ([[String]])
-loadUserData userName = do
+-- (Number incorrect, Total attempts)
+type UserData = [(Int, Int)]
+
+
+loadUserData :: Vocab -> String -> IO UserData
+loadUserData vocab userName = do
   -- TODO: Create directory for user data (use `createDirectoryIfMissing`)
   -- Use `listDirectory` to get all user data entries and create entry if
   -- missing.
   putStr "Loading user data...\n"
-  let userFileName = userName ++ ".dat"
-  userFileExists <- doesFileExist userFileName
+  let fileName = userName ++ ".dat"
+  userFileExists <- doesFileExist fileName
   if userFileExists
     then do return ()
-    else do initUserFile userFileName
-  userData <- readFile userFileName
-  return (getFrequencies userData)
+    else do initUserFile vocab fileName
+  userData <- readFile fileName
+  return (read userData)
 
-initUserFile :: String -> IO ()
-initUserFile userFileName = do
-  -- Create the file.
-  _ <- writeFile userFileName ""
-  return ()
 
-getFrequencies :: String -> [[String]]
-getFrequencies userData = map (splitAndStrip ",") . lines $ userData
+initUserFile :: Vocab -> String -> IO ()
+initUserFile vocab fileName = withFile fileName WriteMode
+  (\handle -> hPutStrLn handle (show (initWordCounts vocab)))
+
+
+initWordCounts :: Vocab -> UserData
+initWordCounts vocab = map (\_ -> (1, 2)) vocab
