@@ -3440,9 +3440,3 @@ and => und
 during => während
 because => weil
 if; whenever => wenn
-
-
-
-
-
-
